@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+      /* Language and Environment */
+      "target": "ES2020",
+      /* Modules */
+      "module": "CommonJS",
+      "rootDir": "src",
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+     
+      "outDir": "dist",
+  
+      // "mapRoot": "",
+      "sourceMap": true,
+  
+  
+      "forceConsistentCasingInFileNames": true,
+  
+      /* Type Checking */
+      "strict": true,
+  
+      "skipLibCheck": true
+    },
+    "include": ["src/**/*", "src/db"],
+    "exclude": ["node_modules", "dist", "build", "coverage", "scripts", "test"],
+    
+  }
