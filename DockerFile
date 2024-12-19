@@ -24,7 +24,7 @@ ENV NODE_PATH=./dist
 EXPOSE 8080
 
 # Set the ownership of the app to the node user
-RUN chown -R node /usr/src/
+RUN chown -R node /usr/src/app
 USER node
 
 # Build the app (in case anything was missed in the build stage)
