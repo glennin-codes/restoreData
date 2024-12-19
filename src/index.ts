@@ -62,9 +62,7 @@ async function discoverDatabases() {
         // Method 3: Attempt common database names
         console.log("\n=== Method 3: Common Database Names ===");
         const commonNames = [
-            'serenity', 'main', 'app', 'production', 'prod', 'staging', 'dev',
-            'development', 'test', 'admin', 'config', 'local', 'database',
-            'db', 'data', 'backup', 'restore'
+            'serenity', 'admin'
         ];
 
         for (const dbName of commonNames) {
