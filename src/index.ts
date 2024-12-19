@@ -8,67 +8,58 @@ console.log("PEM file path:", pemFilePath);
 // Connection URI
 const uri = `mongodb://serenity:serenity@db-restoreserenity.cluster-cxbhfsiqrl4y.us-east-1.docdb.amazonaws.com:27017/?tls=true&tlsCAFile=${pemFilePath}&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false&directConnection=true`;
 
-async function listDatabasesAndCollections() {
-  console.log("function running ..");
+async function accessDatabase() {
+  console.log("Function running...");
   const client = new MongoClient(uri, {
     connectTimeoutMS: 60000,
-    // Add these options for better error handling and compatibility
     serverSelectionTimeoutMS: 60000,
-  
+ 
   });
 
   try {
-    // Connect to the cluster
     await client.connect();
     console.log("Connected to DocumentDB!");
 
-    // List databases
-    const adminDb = client.db().admin();
-    const result = await adminDb.listDatabases();
+    // Try to access a specific database - replace 'your_database_name' with your actual database name
+    const dbName = 'serenity'; // <-- Change this to your database name
+    const db = client.db(dbName);
     
-    if (!result || !result.databases) {
-      console.log("No databases found or unauthorized access");
-      return;
+    console.log(`\nAttempting to access database: ${dbName}`);
+    
+    // List collections in this specific database
+    const collections = await db.listCollections().toArray();
+    console.log('\nCollections found:');
+    if (collections.length === 0) {
+      console.log('No collections found or no access to view collections');
+    } else {
+      collections.forEach(collection => {
+        console.log(`- ${collection.name}`);
+        // Optionally, try to count documents in each collection
+        db.collection(collection.name).countDocuments()
+          .then(count => console.log(`  Documents in ${collection.name}: ${count}`))
+          .catch(err => console.log(`  Unable to count documents in ${collection.name}: ${err.message}`));
+      });
     }
 
-    console.log("\nDatabases:");
-    console.log(JSON.stringify(result.databases, null, 2));
-
-    // For each database, list its collections
-    for (const db of result.databases) {
-      try {
-        console.log(`\nCollections in database "${db.name}":`);
-        const database = client.db(db.name);
-        const collections = await database.listCollections().toArray();
-        
-        if (collections.length === 0) {
-          console.log(`- No collections found in ${db.name}`);
-        } else {
-          collections.forEach(collection => 
-            console.log(`- ${collection.name}`)
-          );
-        }
-      } catch (dbError:any) {
-        console.error(`Error accessing database ${db.name}:`, dbError.message);
-      }
-    }
-  } catch (error:any) {
-    console.error("Error connecting or listing databases:", error);
-    // Log more detailed error information
-    if (error.code) console.error("Error code:", error.code);
-    if (error.codeName) console.error("Error codeName:", error.codeName);
-  } finally {
+    // Try to get build info to check permissions
     try {
-      await client.close();
-      console.log("Connection closed.");
-    } catch (closeError) {
-      console.error("Error while closing connection:", closeError);
+      const buildInfo = await db.command({ buildInfo: 1 });
+      console.log('\nBuild Info:', buildInfo);
+    } catch (buildInfoError:any) {
+      console.log('\nUnable to get build info:', buildInfoError.message);
     }
+
+  } catch (error:any) {
+    console.error("Error accessing database:", error);
+    if (error.codeName) console.error("Error code name:", error.codeName);
+    if (error.message) console.error("Error message:", error.message);
+  } finally {
+    await client.close();
+    console.log("Connection closed.");
   }
 }
 
-// Add error handling for the main function call
-listDatabasesAndCollections().catch(error => {
+accessDatabase().catch(error => {
   console.error("Top-level error:", error);
   process.exit(1);
 });
