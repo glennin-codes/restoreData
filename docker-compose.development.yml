@@ -2,7 +2,7 @@ version: '3.4'
 
 services:
  restoredata:
-    image:  restoredata
+    image: restoredata:latest
     build:
       context: .
       dockerfile: ./Dockerfile
