@@ -8,6 +8,7 @@ console.log("PEM file path:", pemFilePath);
 // Connection URI
 const uri = `mongodb://serenity:serenity@db-restoreserenity.cluster-cxbhfsiqrl4y.us-east-1.docdb.amazonaws.com:27017/?tls=true&tlsCAFile=${pemFilePath}&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false&directConnection=true`;
 
+
 async function listDatabasesAndCollections() {
   console.log("function running ..")
   const client = new MongoClient(uri, { connectTimeoutMS: 60000 });
