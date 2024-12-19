@@ -8,58 +8,126 @@ console.log("PEM file path:", pemFilePath);
 // Connection URI
 const uri = `mongodb://serenity:serenity@db-restoreserenity.cluster-cxbhfsiqrl4y.us-east-1.docdb.amazonaws.com:27017/?tls=true&tlsCAFile=${pemFilePath}&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false&directConnection=true`;
 
-async function accessDatabase() {
-  console.log("Function running...");
-  const client = new MongoClient(uri, {
-    connectTimeoutMS: 60000,
-    serverSelectionTimeoutMS: 60000,
- 
-  });
+async function discoverDatabases() {
+    console.log("\n=== Starting Detailed Database Discovery ===\n");
+    const client = new MongoClient(uri, {
+        connectTimeoutMS: 60000,
+        serverSelectionTimeoutMS: 60000,
 
-  try {
-    await client.connect();
-    console.log("Connected to DocumentDB!");
+    });
 
-    // Try to access a specific database - replace 'your_database_name' with your actual database name
-    const dbName = 'serenity'; // <-- Change this to your database name
-    const db = client.db(dbName);
-    
-    console.log(`\nAttempting to access database: ${dbName}`);
-    
-    // List collections in this specific database
-    const collections = await db.listCollections().toArray();
-    console.log('\nCollections found:');
-    if (collections.length === 0) {
-      console.log('No collections found or no access to view collections');
-    } else {
-      collections.forEach(collection => {
-        console.log(`- ${collection.name}`);
-        // Optionally, try to count documents in each collection
-        db.collection(collection.name).countDocuments()
-          .then(count => console.log(`  Documents in ${collection.name}: ${count}`))
-          .catch(err => console.log(`  Unable to count documents in ${collection.name}: ${err.message}`));
-      });
-    }
-
-    // Try to get build info to check permissions
     try {
-      const buildInfo = await db.command({ buildInfo: 1 });
-      console.log('\nBuild Info:', buildInfo);
-    } catch (buildInfoError:any) {
-      console.log('\nUnable to get build info:', buildInfoError.message);
-    }
+        await client.connect();
+        console.log("✓ Successfully connected to DocumentDB cluster");
 
-  } catch (error:any) {
-    console.error("Error accessing database:", error);
-    if (error.codeName) console.error("Error code name:", error.codeName);
-    if (error.message) console.error("Error message:", error.message);
-  } finally {
-    await client.close();
-    console.log("Connection closed.");
-  }
+        // Method 1: Try admin commands
+        console.log("\n=== Method 1: Administrative Commands ===");
+        try {
+            const adminDb = client.db('admin');
+            console.log("Attempting to run admin commands...");
+            
+            // Try different commands that might reveal database info
+            const commands = [
+                { listDatabases: 1 },
+                { dbStats: 1 },
+                { serverStatus: 1 }
+            ];
+
+            for (const command of commands) {
+                try {
+                    const result = await adminDb.command(command);
+                    console.log(`\nCommand ${Object.keys(command)[0]} result:`);
+                    console.log(JSON.stringify(result, null, 2));
+                } catch (cmdError:any) {
+                    console.log(`Command ${Object.keys(command)[0]} failed:`, cmdError.message);
+                }
+            }
+        } catch (adminError:any) {
+            console.log("Admin commands failed:", adminError.message);
+        }
+
+        // Method 2: Try to access system collections
+        console.log("\n=== Method 2: System Collections ===");
+        const systemDbs = ['admin', 'local', 'config'];
+        for (const dbName of systemDbs) {
+            try {
+                const db = client.db(dbName);
+                const collections = await db.listCollections().toArray();
+                console.log(`\nSystem database '${dbName}' collections:`, collections.map(c => c.name));
+            } catch (sysError:any) {
+                console.log(`Could not access system database '${dbName}':`, sysError.message);
+            }
+        }
+
+        // Method 3: Attempt common database names
+        console.log("\n=== Method 3: Common Database Names ===");
+        const commonNames = [
+            'serenity', 'main', 'app', 'production', 'prod', 'staging', 'dev',
+            'development', 'test', 'admin', 'config', 'local', 'database',
+            'db', 'data', 'backup', 'restore'
+        ];
+
+        for (const dbName of commonNames) {
+            try {
+                console.log(`\nTrying database: ${dbName}`);
+                const db = client.db(dbName);
+                
+                // Try to get database stats
+                try {
+                    const stats = await db.stats();
+                    console.log(`Database '${dbName}' stats:`, stats);
+                } catch (statsError) {
+                    console.log(`Could not get stats for '${dbName}'`);
+                }
+                
+                // List collections
+                const collections = await db.listCollections().toArray();
+                if (collections.length > 0) {
+                    console.log(`Found collections in '${dbName}':`);
+                    for (const collection of collections) {
+                        console.log(`\nCollection: ${collection.name}`);
+                        try {
+                            const count = await db.collection(collection.name).countDocuments();
+                            console.log(`- Document count: ${count}`);
+                            
+                            if (count > 0) {
+                                const sample = await db.collection(collection.name)
+                                    .find({})
+                                    .limit(1)
+                                    .toArray();
+                                console.log("- Sample document structure:", Object.keys(sample[0]));
+                            }
+                        } catch (collError:any) {
+                            console.log(`- Error accessing collection: ${collError.message}`);
+                        }
+                    }
+                } else {
+                    console.log(`No collections found in '${dbName}'`);
+                }
+            } catch (dbError:any) {
+                console.log(`Error accessing '${dbName}':`, dbError.message);
+            }
+        }
+
+        // Method 4: Check for active connections and operations
+        console.log("\n=== Method 4: Active Operations ===");
+        try {
+            const adminDb = client.db('admin');
+            const currentOp = await adminDb.command({ currentOp: 1 });
+            console.log("Active operations:", currentOp);
+        } catch (opError:any) {
+            console.log("Could not check active operations:", opError.message);
+        }
+
+    } catch (error) {
+        console.error("\nMain error during discovery:", error);
+    } finally {
+        await client.close();
+        console.log("\n=== Database Discovery Complete ===");
+    }
 }
 
-accessDatabase().catch(error => {
-  console.error("Top-level error:", error);
-  process.exit(1);
+discoverDatabases().catch(error => {
+    console.error("Fatal error:", error);
+    process.exit(1);
 });
