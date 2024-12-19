@@ -20,7 +20,7 @@ async function listDatabasesAndCollections() {
 
     // List databases
     const databases = await client.db().admin().listDatabases();
-    console.log("Databases:");
+    console.log("Databases: ", databases.databases);
     databases.databases.forEach((db) => console.log(`- ${db.name}`));
 
     // For each database, list its collections
