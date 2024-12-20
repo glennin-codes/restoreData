@@ -3,129 +3,125 @@ import path from "path";
 
 // Path to the PEM file
 const pemFilePath = path.resolve(__dirname, "../global_bundle.pem");
-console.log("PEM file path:", pemFilePath);
 
 // Connection URI
 const uri = `mongodb://serenity:serenity@db-restoreserenity.cluster-cxbhfsiqrl4y.us-east-1.docdb.amazonaws.com:27017/?tls=true&tlsCAFile=${pemFilePath}&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false&directConnection=true`;
 
-async function discoverDatabases() {
-    console.log("\n=== Starting Detailed Database Discovery ===\n");
+// Add your schema collection names here
+const expectedCollections = [
+    // Example: if your schema has models like User, Product, etc.
+    // add them here exactly as they appear in your schema
+    'User',
+    'TaskReminder',
+    'Subtitle',
+    'Report',
+    'Reading',
+    'Question',
+    'Promo',
+    'Post',
+    'Podcast',
+    "Notification",
+    "Message",
+    'Meeting',
+    "Inventory",
+    'Gratitude',
+    'FriendInNeed',
+    'Conversation',
+    'Comment',
+    "Chat",
+   'Block',
+   'AppVersion'
+
+
+    // Add more collection names from your schema
+];
+
+async function checkSchemaCollections() {
+    console.log("Starting schema-based database check...");
     const client = new MongoClient(uri, {
         connectTimeoutMS: 60000,
         serverSelectionTimeoutMS: 60000,
-
+       
     });
 
     try {
         await client.connect();
-        console.log("✓ Successfully connected to DocumentDB cluster");
+        console.log("Connected to DocumentDB!");
 
-        // Method 1: Try admin commands
-        console.log("\n=== Method 1: Administrative Commands ===");
-        try {
-            const adminDb = client.db('admin');
-            console.log("Attempting to run admin commands...");
+        // Try each collection name
+        for (const collectionName of expectedCollections) {
+            console.log(`\nChecking collection: ${collectionName}`);
             
-            // Try different commands that might reveal database info
-            const commands = [
-                { listDatabases: 1 },
-                { dbStats: 1 },
-                { serverStatus: 1 }
-            ];
-
-            for (const command of commands) {
-                try {
-                    const result = await adminDb.command(command);
-                    console.log(`\nCommand ${Object.keys(command)[0]} result:`);
-                    console.log(JSON.stringify(result, null, 2));
-                } catch (cmdError:any) {
-                    console.log(`Command ${Object.keys(command)[0]} failed:`, cmdError.message);
-                }
-            }
-        } catch (adminError:any) {
-            console.log("Admin commands failed:", adminError.message);
-        }
-
-        // Method 2: Try to access system collections
-        console.log("\n=== Method 2: System Collections ===");
-        const systemDbs = ['admin', 'local', 'config'];
-        for (const dbName of systemDbs) {
             try {
-                const db = client.db(dbName);
-                const collections = await db.listCollections().toArray();
-                console.log(`\nSystem database '${dbName}' collections:`, collections.map(c => c.name));
-            } catch (sysError:any) {
-                console.log(`Could not access system database '${dbName}':`, sysError.message);
-            }
-        }
-
-        // Method 3: Attempt common database names
-        console.log("\n=== Method 3: Common Database Names ===");
-        const commonNames = [
-            'serenity', 'admin'
-        ];
-
-        for (const dbName of commonNames) {
-            try {
-                console.log(`\nTrying database: ${dbName}`);
-                const db = client.db(dbName);
+                // Try common database names with this collection
+                const dbsToTry = ['serenity', 'main', 'test', 'admin'];
                 
-                // Try to get database stats
-                try {
-                    const stats = await db.stats();
-                    console.log(`Database '${dbName}' stats:`, stats);
-                } catch (statsError) {
-                    console.log(`Could not get stats for '${dbName}'`);
-                }
-                
-                // List collections
-                const collections = await db.listCollections().toArray();
-                if (collections.length > 0) {
-                    console.log(`Found collections in '${dbName}':`);
-                    for (const collection of collections) {
-                        console.log(`\nCollection: ${collection.name}`);
-                        try {
-                            const count = await db.collection(collection.name).countDocuments();
-                            console.log(`- Document count: ${count}`);
-                            
-                            if (count > 0) {
-                                const sample = await db.collection(collection.name)
-                                    .find({})
-                                    .limit(1)
-                                    .toArray();
-                                console.log("- Sample document structure:", Object.keys(sample[0]));
-                            }
-                        } catch (collError:any) {
-                            console.log(`- Error accessing collection: ${collError.message}`);
+                for (const dbName of dbsToTry) {
+                    console.log(`\nTrying database '${dbName}' for collection '${collectionName}'`);
+                    const db = client.db(dbName);
+                    
+                    try {
+                        const collection = db.collection(collectionName);
+                        const count = await collection.countDocuments();
+                        console.log(`Found collection! Document count: ${count}`);
+                        
+                        if (count > 0) {
+                            // Try to get a sample document
+                            const sample = await collection.findOne({});
+                            console.log("Sample document structure:", sample);
+                            console.log("SUCCESS: Found data in", dbName, collectionName);
+                            return { database: dbName, collection: collectionName, sample };
                         }
+                    } catch (collError:any) {
+                        console.log(`Error checking collection in ${dbName}:`, collError.message);
                     }
-                } else {
-                    console.log(`No collections found in '${dbName}'`);
                 }
-            } catch (dbError:any) {
-                console.log(`Error accessing '${dbName}':`, dbError.message);
+            } catch (error:any) {
+                console.log(`Error checking collection ${collectionName}:`, error.message);
             }
         }
-
-        // Method 4: Check for active connections and operations
-        console.log("\n=== Method 4: Active Operations ===");
-        try {
-            const adminDb = client.db('admin');
-            const currentOp = await adminDb.command({ currentOp: 1 });
-            console.log("Active operations:", currentOp);
-        } catch (opError:any) {
-            console.log("Could not check active operations:", opError.message);
-        }
-
     } catch (error) {
-        console.error("\nMain error during discovery:", error);
+        console.error("Main error:", error);
     } finally {
         await client.close();
-        console.log("\n=== Database Discovery Complete ===");
+        console.log("\nDatabase check complete");
     }
 }
 
-discoverDatabases().catch(error => {
-    console.error("Fatal error:", error);
-    process.exit(1);
-});
+// You can also provide the exact database name if you know it
+async function checkSpecificDatabase(dbName: string | undefined, collections: any) {
+    const client = new MongoClient(uri, {
+        connectTimeoutMS: 60000,
+        serverSelectionTimeoutMS: 60000,
+       
+    });
+
+    try {
+        await client.connect();
+        console.log(`Checking specific database: ${dbName}`);
+        
+        const db = client.db(dbName);
+        for (const collectionName of collections) {
+            try {
+                const collection = db.collection(collectionName);
+                const count = await collection.countDocuments();
+                console.log(`${collectionName}: ${count} documents`);
+                
+                if (count > 0) {
+                    const sample = await collection.findOne({});
+                    console.log(`Sample from ${collectionName}:`, sample);
+                }
+            } catch (error:any) {
+                console.log(`Error with collection ${collectionName}:`, error.message);
+            }
+        }
+    } finally {
+        await client.close();
+    }
+}
+
+// Run the checks
+checkSchemaCollections();
+
+// If you know the exact database name, uncomment and use this:
+// checkSpecificDatabase('your_database_name', expectedCollections);
